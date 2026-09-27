@@ -1,5 +1,5 @@
 import { ENV } from "./_core/env";
-import { MARATHI_TRAINING_DATASET } from "./marathi-training-dataset";
+import { REAL_MARATHI_TRAINING_DATASET } from "./marathi-real-dataset";
 
 export type Sentiment = "positive" | "negative" | "neutral";
 export type Emotion = "happy" | "sad" | "angry" | "fear" | "surprise" | "neutral";
@@ -21,11 +21,16 @@ export type WordCount = { word: string; count: number };
 
 export type ModelComparison = {
   tfidfNaiveBayesAccuracy: number;
+  precision: number;
+  recall: number;
+  macroF1: number;
   ruleBasedCoverage: number;
   datasetSize: number;
+  datasetName: string;
   vocabularySize: number;
   trainingComments: number;
   testingComments: number;
+  confusionMatrix: Array<{ actual: Sentiment; positive: number; negative: number; neutral: number }>;
   note: string;
 };
 
@@ -271,13 +276,20 @@ function classifyEmotion(text: string, sentiment: Sentiment): Emotion {
 }
 
 function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
-  const documents = MARATHI_TRAINING_DATASET.map((example) => ({ tokens: tokenize(example.text), label: example.sentiment }));
+  const documents = REAL_MARATHI_TRAINING_DATASET.map((example) => ({ tokens: tokenize(example.text), label: example.sentiment }));
   const vocabulary = Array.from(new Set(documents.flatMap((document) => document.tokens.filter((token) => token.length > 1 && !MARATHI_STOP_WORDS.has(token)))));
-  const split = Math.max(1, Math.floor(documents.length * 0.8));
-  const training = documents.slice(0, split);
-  const testing = documents.slice(split);
+  const classes: Sentiment[] = ["positive", "negative", "neutral"];
+  const training = classes.flatMap((label) => {
+    const classDocuments = documents.filter((document) => document.label === label);
+    return classDocuments.slice(0, Math.max(1, Math.floor(classDocuments.length * 0.8)));
+  });
+  const testing = classes.flatMap((label) => {
+    const classDocuments = documents.filter((document) => document.label === label);
+    return classDocuments.slice(Math.max(1, Math.floor(classDocuments.length * 0.8)));
+  });
+  const emptyMatrix = classes.map((actual) => ({ actual, positive: 0, negative: 0, neutral: 0 }));
   if (vocabulary.length === 0 || testing.length === 0 || training.length < 2) {
-    return { tfidfNaiveBayesAccuracy: 0, ruleBasedCoverage: 0, datasetSize: MARATHI_TRAINING_DATASET.length, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Add more labeled comments for a meaningful holdout comparison." };
+    return { tfidfNaiveBayesAccuracy: 0, precision: 0, recall: 0, macroF1: 0, ruleBasedCoverage: 0, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix: emptyMatrix, note: "Add more labeled comments for a meaningful holdout comparison." };
   }
   const documentFrequency = new Map<string, number>();
   documents.forEach((document) => Array.from(new Set(document.tokens)).forEach((token) => documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1)));
@@ -298,7 +310,6 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
     tokenSums.set(document.label, sums);
     tokenTotals.set(document.label, (tokenTotals.get(document.label) ?? 0) + values.reduce((sum, value) => sum + value, 0));
   });
-  const classes: Sentiment[] = ["positive", "negative", "neutral"];
   const predict = (tokens: string[]): Sentiment => {
     const values = vector(tokens);
     return classes.reduce((best, label) => {
@@ -309,9 +320,24 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
       return score > best.score ? { label, score } : best;
     }, { label: "neutral" as Sentiment, score: Number.NEGATIVE_INFINITY }).label;
   };
-  const correct = testing.filter((document) => predict(document.tokens) === document.label).length;
+  const predictions = testing.map((document) => ({ actual: document.label, predicted: predict(document.tokens) }));
+  const correct = predictions.filter((item) => item.predicted === item.actual).length;
+  const confusionMatrix = classes.map((actual) => ({
+    actual,
+    positive: predictions.filter((item) => item.actual === actual && item.predicted === "positive").length,
+    negative: predictions.filter((item) => item.actual === actual && item.predicted === "negative").length,
+    neutral: predictions.filter((item) => item.actual === actual && item.predicted === "neutral").length,
+  }));
+  const perClass = classes.map((label) => {
+    const truePositive = predictions.filter((item) => item.actual === label && item.predicted === label).length;
+    const falsePositive = predictions.filter((item) => item.actual !== label && item.predicted === label).length;
+    const falseNegative = predictions.filter((item) => item.actual === label && item.predicted !== label).length;
+    const precision = truePositive / Math.max(1, truePositive + falsePositive);
+    const recall = truePositive / Math.max(1, truePositive + falseNegative);
+    return { precision, recall, f1: (2 * precision * recall) / Math.max(0.0001, precision + recall) };
+  });
   const coverage = Math.round((comments.filter((comment) => comment.language !== "other").length / Math.max(1, comments.length)) * 100);
-  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), ruleBasedCoverage: coverage, datasetSize: MARATHI_TRAINING_DATASET.length, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Holdout score uses the bundled curated seed corpus; replace or extend it with manually annotated YouTube comments for final academic accuracy." };
+  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), precision: Math.round((perClass.reduce((sum, item) => sum + item.precision, 0) / classes.length) * 100), recall: Math.round((perClass.reduce((sum, item) => sum + item.recall, 0) / classes.length) * 100), macroF1: Math.round((perClass.reduce((sum, item) => sum + item.f1, 0) / classes.length) * 100), ruleBasedCoverage: coverage, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix, note: "Holdout metrics use a balanced real sample from L3Cube-MahaSent-MD. Emotion labels in this sample are compatibility labels, not gold emotion annotations." };
 }
 
 function classifyComment(comment: RawComment): AnalyzedComment {

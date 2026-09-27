@@ -2,7 +2,7 @@
 
 ## Important distinction
 
-The built-in 150-row corpus in this project is a **transparent curated seed dataset** for demonstrating TF-IDF + Naive Bayes. It is not an external research corpus and it must not be presented as a real YouTube dataset.
+The app now trains on a balanced **1,500-row real sample** extracted from the L3Cube-MahaSent-MD training split. The original 150-row corpus remains in the repository only as a transparent fallback/demo seed and is not presented as a real YouTube dataset.
 
 For a credible academic result:
 

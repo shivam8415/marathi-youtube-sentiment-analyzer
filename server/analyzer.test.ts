@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeRawComments, createDemoAnalysis, extractYouTubeVideoId } from "./analyzer";
-import { MARATHI_TRAINING_DATASET } from "./marathi-training-dataset";
+import { REAL_MARATHI_TRAINING_DATASET } from "./marathi-real-dataset";
 
 describe("YouTube URL parsing", () => {
   it("extracts IDs from common YouTube URL formats", () => {
@@ -12,11 +12,11 @@ describe("YouTube URL parsing", () => {
 });
 
 describe("Marathi analysis engine", () => {
-  it("ships a balanced 150-example seed dataset", () => {
-    expect(MARATHI_TRAINING_DATASET).toHaveLength(150);
-    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "positive")).toHaveLength(50);
-    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "negative")).toHaveLength(50);
-    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "neutral")).toHaveLength(50);
+  it("ships a balanced real 1,500-example MahaSent-MD sample", () => {
+    expect(REAL_MARATHI_TRAINING_DATASET).toHaveLength(1500);
+    expect(REAL_MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "positive")).toHaveLength(500);
+    expect(REAL_MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "negative")).toHaveLength(500);
+    expect(REAL_MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "neutral")).toHaveLength(500);
   });
 
   it("classifies positive, negative, and neutral Marathi comments", () => {
@@ -33,6 +33,11 @@ describe("Marathi analysis engine", () => {
     expect(result.comments[0]?.emotion).toBe("happy");
     expect(result.modelComparison.vocabularySize).toBeGreaterThan(0);
     expect(result.modelComparison.trainingComments).toBeGreaterThan(0);
+    expect(result.modelComparison.datasetSize).toBe(1500);
+    expect(result.modelComparison.precision).toBeGreaterThanOrEqual(0);
+    expect(result.modelComparison.recall).toBeGreaterThanOrEqual(0);
+    expect(result.modelComparison.macroF1).toBeGreaterThanOrEqual(0);
+    expect(result.modelComparison.confusionMatrix).toHaveLength(3);
   });
 
   it("recognizes common Roman-script Marathi phrases as mixed Marathi", () => {

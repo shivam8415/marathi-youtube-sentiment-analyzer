@@ -223,6 +223,27 @@ function EmotionCard({ result }: { result: AnalysisResult }) {
   );
 }
 
+function EvaluationCard({ result }: { result: AnalysisResult }) {
+  const metrics = [
+    ["Accuracy", result.modelComparison.tfidfNaiveBayesAccuracy, "#246b45"],
+    ["Precision", result.modelComparison.precision, "#5e8ee4"],
+    ["Recall", result.modelComparison.recall, "#9b7ede"],
+    ["Macro-F1", result.modelComparison.macroF1, "#e39a3d"],
+  ] as const;
+  return (
+    <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]">
+      <CardHeader className="pb-2"><p className="section-kicker">Academic evaluation</p><CardTitle className="mt-2 text-lg text-[#19342a]">Real Marathi dataset benchmark</CardTitle><p className="mt-1 text-xs leading-5 text-[#718078]">TF-IDF + Naive Bayes holdout metrics from {result.modelComparison.datasetName}. Train: {result.modelComparison.trainingComments} rows · test: {result.modelComparison.testingComments} rows.</p></CardHeader>
+      <CardContent>
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+          {metrics.map(([label, value, color]) => <div key={label} className="rounded-xl bg-[#f4faf5] px-3 py-3 text-center"><div className="font-mono text-xl" style={{ color }}>{value}%</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">{label}</div></div>)}
+        </div>
+        <div className="mt-5 overflow-x-auto"><p className="mb-2 text-[10px] font-bold uppercase tracking-[0.16em] text-[#829187]">Confusion matrix · rows actual / columns predicted</p><table className="w-full min-w-[420px] border-separate border-spacing-1 text-center text-xs"><thead><tr><th className="p-2 text-left font-medium text-[#829187]">Actual ↓</th>{["Positive", "Negative", "Neutral"].map((label) => <th key={label} className="rounded-lg bg-[#f4faf5] p-2 font-semibold text-[#607369]">{label}</th>)}</tr></thead><tbody>{result.modelComparison.confusionMatrix.map((row) => <tr key={row.actual}><th className="p-2 text-left font-semibold capitalize text-[#607369]">{row.actual}</th><td className="rounded-lg bg-[#e3f5e8] p-2 font-mono text-[#246b45]">{row.positive}</td><td className="rounded-lg bg-[#fff0eb] p-2 font-mono text-[#b9503c]">{row.negative}</td><td className="rounded-lg bg-[#f0f3f6] p-2 font-mono text-[#667487]">{row.neutral}</td></tr>)}</tbody></table></div>
+        <p className="mt-3 text-[11px] leading-5 text-[#829187]">{result.modelComparison.note}</p>
+      </CardContent>
+    </Card>
+  );
+}
+
 function CommentRow({ comment }: { comment: AnalysisResult["comments"][number] }) {
   const tone = sentimentCopy[comment.sentiment];
   return (
@@ -246,6 +267,11 @@ function ResultsView({ result }: { result: AnalysisResult }) {
     const rows = result.comments.map((comment) => [comment.text, comment.sentiment, comment.emotion, Math.round(comment.confidence * 100) + "%", comment.likeCount, comment.language, comment.authorDisplayName, comment.publishedAt].map(csvCell).join(","));
     downloadFile(`marathi-lens-${result.video.id}-comments.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
   };
+  const exportAnnotationTemplate = () => {
+    const header = ["commentId", "comment", "predictedSentiment", "predictedEmotion", "goldSentiment", "goldEmotion", "annotatorNotes"].join(",");
+    const rows = result.comments.map((comment) => [comment.id, comment.text, comment.sentiment, comment.emotion, "", "", ""].map(csvCell).join(","));
+    downloadFile(`marathi-lens-${result.video.id}-annotation-template.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
+  };
   return (
     <div className="space-y-5">
       <Card className="overflow-hidden border-0 bg-[#1d4d35] text-white shadow-[0_15px_40px_rgba(27,75,48,0.18)]">
@@ -263,7 +289,8 @@ function ResultsView({ result }: { result: AnalysisResult }) {
         <StatCard label="Average signal" value={`${result.averageSentimentScore > 0 ? "+" : ""}${result.averageSentimentScore}`} detail={avgLabel} icon={Activity} accent="#f2b84b" />
         <StatCard label="Language filter" value={result.languageMode === "marathi" ? "Marathi" : "All"} detail={`${result.skippedCount} comments outside signal`} icon={Languages} accent="#9b7ede" />
       </div>
-      <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"><div><p className="section-kicker">Academic comparison</p><h3 className="mt-2 text-lg font-semibold text-[#19342a]">TF-IDF + Naive Bayes baseline</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#718078]">Trained on the bundled 150-example Marathi seed corpus. Replace it with manually annotated YouTube comments for your final report.</p></div><div className="grid grid-cols-3 gap-3"><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#246b45]">{result.modelComparison.tfidfNaiveBayesAccuracy}%</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">NB holdout</div></div><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#5e8ee4]">{result.modelComparison.datasetSize}</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">dataset rows</div></div><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#f2b84b]">{result.modelComparison.vocabularySize}</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">vocabulary</div></div></div></CardContent></Card>
+      <EvaluationCard result={result} />
+      <Card className="border-0 bg-[#fffaf0] shadow-[0_10px_30px_rgba(44,73,58,0.04)]"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="section-kicker text-[#b9822e]">YouTube evaluation workflow</p><h3 className="mt-2 text-lg font-semibold text-[#19342a]">Create your manually labeled test set</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#7f715c]">Use this template to annotate 100–150 real comments with gold sentiment, gold emotion, and notes. Keep this YouTube set separate from the benchmark dataset in your final report.</p></div><Button onClick={exportAnnotationTemplate} variant="outline" className="shrink-0 rounded-xl border-[#ead7ad] bg-white text-[#8b6424] hover:bg-[#fff5dc]"><FileSpreadsheet size={15} className="mr-2" />Annotation template</Button></CardContent></Card>
       <div className="grid gap-5 lg:grid-cols-2"><DistributionCard result={result} /><EmotionCard result={result} /></div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#deebe0] bg-[#f8fcf8] px-4 py-3"><div className="flex items-center gap-2 text-xs text-[#607369]"><Download size={15} className="text-[#5d9a73]" />Save this scan for your project report</div><div className="flex gap-2"><Button onClick={exportCsv} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><FileSpreadsheet size={14} className="mr-1.5" />CSV comments</Button><Button onClick={exportJson} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><Download size={14} className="mr-1.5" />JSON report</Button></div></div>
       <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">

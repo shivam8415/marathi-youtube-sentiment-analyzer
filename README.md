@@ -12,7 +12,7 @@ A full-stack Marathi NLP dashboard that accepts a YouTube video URL, retrieves p
 
 The results also include a small TF-IDF + Naive Bayes holdout comparison, Roman-script Marathi detection (for phrases such as `khup chan video`), and one-click JSON/CSV downloads for your project report.
 
-The project includes a transparent **150-row curated seed dataset** in `server/marathi-training-dataset.ts` (50 positive, 50 negative, 50 neutral examples). It is used for model training only; live dashboards never pad or invent YouTube comments. If a video has fewer than 150 public comments, the app reports the actual available count.
+The project includes a balanced **1,500-row real sample** from L3Cube-MahaSent-MD in `server/marathi-real-dataset.ts` (500 positive, 500 negative, 500 neutral). It is used for TF-IDF + Naive Bayes training and holdout evaluation; live dashboards never pad or invent YouTube comments. If a video has fewer than 150 public comments, the app reports the actual available count.
 
 There is no CSV upload in the user workflow. The browser sends only the URL to the server; the API key never reaches the browser.
 
@@ -44,7 +44,8 @@ pnpm build
 - Marathi stop-word removal
 - Explainable lexicon sentiment scoring with negation handling
 - Rule-based emotion scoring
-- TF-IDF + Naive Bayes comparison panel trained on the transparent 150-row seed corpus
+- TF-IDF + Naive Bayes evaluation panel with accuracy, precision, recall, macro-F1, and confusion matrix
+- Downloadable annotation template for manually labeling 100–150 real YouTube comments
 - Recharts visualizations for the dashboard
 
 This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with a real Marathi corpus or IndicBERT. See [MARATHI_NLP_RESOURCES.md](MARATHI_NLP_RESOURCES.md) for verified real datasets, tools, API references, and licensing caveats.
