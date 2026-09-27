@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { analyzeRawComments, createDemoAnalysis, extractYouTubeVideoId } from "./analyzer";
+import { MARATHI_TRAINING_DATASET } from "./marathi-training-dataset";
 
 describe("YouTube URL parsing", () => {
   it("extracts IDs from common YouTube URL formats", () => {
@@ -11,6 +12,13 @@ describe("YouTube URL parsing", () => {
 });
 
 describe("Marathi analysis engine", () => {
+  it("ships a balanced 150-example seed dataset", () => {
+    expect(MARATHI_TRAINING_DATASET).toHaveLength(150);
+    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "positive")).toHaveLength(50);
+    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "negative")).toHaveLength(50);
+    expect(MARATHI_TRAINING_DATASET.filter((example) => example.sentiment === "neutral")).toHaveLength(50);
+  });
+
   it("classifies positive, negative, and neutral Marathi comments", () => {
     const result = analyzeRawComments([
       { id: "1", text: "हा व्हिडिओ खूप सुंदर आणि माहितीपूर्ण आहे" },

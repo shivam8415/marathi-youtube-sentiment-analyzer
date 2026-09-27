@@ -1,4 +1,5 @@
 import { ENV } from "./_core/env";
+import { MARATHI_TRAINING_DATASET } from "./marathi-training-dataset";
 
 export type Sentiment = "positive" | "negative" | "neutral";
 export type Emotion = "happy" | "sad" | "angry" | "fear" | "surprise" | "neutral";
@@ -21,6 +22,7 @@ export type WordCount = { word: string; count: number };
 export type ModelComparison = {
   tfidfNaiveBayesAccuracy: number;
   ruleBasedCoverage: number;
+  datasetSize: number;
   vocabularySize: number;
   trainingComments: number;
   testingComments: number;
@@ -269,13 +271,13 @@ function classifyEmotion(text: string, sentiment: Sentiment): Emotion {
 }
 
 function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
-  const documents = comments.map((comment) => ({ tokens: tokenize(comment.text), label: comment.sentiment }));
+  const documents = MARATHI_TRAINING_DATASET.map((example) => ({ tokens: tokenize(example.text), label: example.sentiment }));
   const vocabulary = Array.from(new Set(documents.flatMap((document) => document.tokens.filter((token) => token.length > 1 && !MARATHI_STOP_WORDS.has(token)))));
   const split = Math.max(1, Math.floor(documents.length * 0.8));
   const training = documents.slice(0, split);
   const testing = documents.slice(split);
   if (vocabulary.length === 0 || testing.length === 0 || training.length < 2) {
-    return { tfidfNaiveBayesAccuracy: 0, ruleBasedCoverage: 0, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Add more labeled comments for a meaningful holdout comparison." };
+    return { tfidfNaiveBayesAccuracy: 0, ruleBasedCoverage: 0, datasetSize: MARATHI_TRAINING_DATASET.length, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Add more labeled comments for a meaningful holdout comparison." };
   }
   const documentFrequency = new Map<string, number>();
   documents.forEach((document) => Array.from(new Set(document.tokens)).forEach((token) => documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1)));
@@ -309,7 +311,7 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
   };
   const correct = testing.filter((document) => predict(document.tokens) === document.label).length;
   const coverage = Math.round((comments.filter((comment) => comment.language !== "other").length / Math.max(1, comments.length)) * 100);
-  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), ruleBasedCoverage: coverage, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Holdout score uses current comments with transparent lexicon labels; use manually annotated data for final academic accuracy." };
+  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), ruleBasedCoverage: coverage, datasetSize: MARATHI_TRAINING_DATASET.length, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Holdout score uses the bundled curated seed corpus; replace or extend it with manually annotated YouTube comments for final academic accuracy." };
 }
 
 function classifyComment(comment: RawComment): AnalyzedComment {

@@ -6,11 +6,13 @@ A full-stack Marathi NLP dashboard that accepts a YouTube video URL, retrieves p
 
 1. Paste a YouTube video URL.
 2. Click **Analyze comments**.
-3. The server retrieves up to 200 public comments.
+3. The server targets up to 150 public comments, including paginated replies when available.
 4. Marathi language signals are selected and classified.
 5. The dashboard shows sentiment balance, emotion fingerprint, repeated words, and comment examples.
 
 The results also include a small TF-IDF + Naive Bayes holdout comparison, Roman-script Marathi detection (for phrases such as `khup chan video`), and one-click JSON/CSV downloads for your project report.
+
+The project includes a transparent **150-row curated seed dataset** in `server/marathi-training-dataset.ts` (50 positive, 50 negative, 50 neutral examples). It is used for model training only; live dashboards never pad or invent YouTube comments. If a video has fewer than 150 public comments, the app reports the actual available count.
 
 There is no CSV upload in the user workflow. The browser sends only the URL to the server; the API key never reaches the browser.
 
@@ -22,7 +24,7 @@ Add this server-side environment variable through the project secret settings:
 YOUTUBE_API_KEY=your_google_cloud_youtube_data_api_key
 ```
 
-The key needs access to **YouTube Data API v3**. The application uses the `videos.list` and `commentThreads.list` endpoints.
+The key needs access to **YouTube Data API v3**. The application uses `videos.list`, `commentThreads.list`, and `comments.list` for reply pagination.
 
 If comments are disabled, the app shows a friendly error. If the key is absent, the app keeps working in demo mode and explains how to enable live mode.
 
@@ -42,7 +44,7 @@ pnpm build
 - Marathi stop-word removal
 - Explainable lexicon sentiment scoring with negation handling
 - Rule-based emotion scoring
-- TF-IDF + Naive Bayes comparison panel with a transparent weak-label disclaimer
+- TF-IDF + Naive Bayes comparison panel trained on the transparent 150-row seed corpus
 - Recharts visualizations for the dashboard
 
-This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with TF-IDF + Naive Bayes or IndicBERT.
+This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with a real Marathi corpus or IndicBERT. See [MARATHI_NLP_RESOURCES.md](MARATHI_NLP_RESOURCES.md) for verified real datasets, tools, API references, and licensing caveats.
