@@ -422,16 +422,24 @@ export async function fetchYouTubeAnalysis(url: string, maxComments = 200): Prom
   const item = videoData.items?.[0];
   if (!item?.snippet?.title) throw new YouTubeAnalysisError("not_found", "That YouTube video could not be found or is not publicly accessible.");
   const comments: RawComment[] = [];
+  const reportedCommentCount = Number(item.statistics?.commentCount ?? 0);
+  const collectionTarget = Math.min(maxComments, Math.max(1, reportedCommentCount || maxComments));
   let pageToken = "";
-  while (comments.length < maxComments) {
-    const pageSize = Math.min(100, maxComments - comments.length);
+  const seenCommentIds = new Set<string>();
+  const addComment = (comment: RawComment) => {
+    if (seenCommentIds.has(comment.id) || comments.length >= collectionTarget) return;
+    seenCommentIds.add(comment.id);
+    comments.push(comment);
+  };
+  while (comments.length < collectionTarget) {
+    const pageSize = Math.min(100, collectionTarget - comments.length);
     const page = await fetchJson<YouTubeCommentResponse>(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId=${encodeURIComponent(id)}&maxResults=${pageSize}&order=relevance${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}&key=${key}`);
     for (const entry of page.items ?? []) {
       if (comments.length >= maxComments) break;
       const snippet = entry.snippet?.topLevelComment?.snippet;
       if (!snippet) continue;
       const parentId = entry.id ?? entry.snippet?.topLevelComment?.id;
-      comments.push({
+      addComment({
         id: parentId ?? `comment-${comments.length + 1}`,
         text: snippet.textOriginal ?? snippet.textDisplay ?? "",
         likeCount: snippet.likeCount,
@@ -443,7 +451,7 @@ export async function fetchYouTubeAnalysis(url: string, maxComments = 200): Prom
         if (comments.length >= maxComments) break;
         const replySnippet = reply.snippet;
         if (!replySnippet) continue;
-        comments.push({
+        addComment({
           id: reply.id ?? `reply-${comments.length + 1}`,
           text: replySnippet.textOriginal ?? replySnippet.textDisplay ?? "",
           likeCount: replySnippet.likeCount,
@@ -460,7 +468,7 @@ export async function fetchYouTubeAnalysis(url: string, maxComments = 200): Prom
             if (comments.length >= maxComments) break;
             const replySnippet = reply.snippet;
             if (!replySnippet) continue;
-            comments.push({
+            addComment({
               id: reply.id ?? `reply-${comments.length + 1}`,
               text: replySnippet.textOriginal ?? replySnippet.textDisplay ?? "",
               likeCount: replySnippet.likeCount,

@@ -21,7 +21,7 @@ export const appRouter = router({
       .input(z.object({
         url: z.string().trim().min(1, "Enter a YouTube URL."),
         demo: z.boolean().optional().default(false),
-        maxComments: z.number().int().min(20).max(200).optional().default(150),
+        maxComments: z.number().int().min(20).max(5000).optional().default(5000),
       }))
       .mutation(async ({ input }) => {
         try {
