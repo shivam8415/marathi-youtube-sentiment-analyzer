@@ -93,6 +93,22 @@ function csvCell(value: unknown) {
   return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
+function isYouTubeUrl(value: string) {
+  try {
+    const url = new URL(value.trim());
+    const host = url.hostname.replace(/^www\./, "");
+    if (host === "youtu.be") return url.pathname.split("/").filter(Boolean)[0]?.length >= 8;
+    if (host === "youtube.com" || host.endsWith("youtube.com")) {
+      const videoId = url.searchParams.get("v");
+      const segments = url.pathname.split("/").filter(Boolean);
+      return Boolean((videoId && videoId.length >= 8) || (["shorts", "embed", "live"].includes(segments[0] ?? "") && (segments[1]?.length ?? 0) >= 8));
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 function StatCard({ label, value, detail, icon: Icon, accent }: { label: string; value: string; detail: string; icon: typeof Eye; accent: string }) {
   return (
     <Card className="stat-card overflow-hidden border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]">
@@ -259,12 +275,12 @@ function ResultsView({ result }: { result: AnalysisResult }) {
 }
 
 export default function Home() {
-  const [url, setUrl] = useState("https://www.youtube.com/watch?v=marathi-demo");
+  const [url, setUrl] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [activeNav, setActiveNav] = useState("Overview");
   const analyze = trpc.analyzer.analyze.useMutation({ onSuccess: (data) => setResult(data) });
   const isWorking = analyze.isPending;
-  const hasValidInput = useMemo(() => url.trim().length > 8, [url]);
+  const hasValidInput = useMemo(() => isYouTubeUrl(url), [url]);
 
   const submit = (demo = false) => {
     if (!hasValidInput && !demo) return;
