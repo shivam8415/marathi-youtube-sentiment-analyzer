@@ -242,7 +242,7 @@ function ResultsView({ result }: { result: AnalysisResult }) {
         </CardContent>
       </Card>
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <StatCard label="Comments analyzed" value={formatNumber(result.analyzedCount)} detail={`${formatNumber(result.totalFetched)} fetched from video`} icon={MessageCircle} accent="#2ab673" />
+        <StatCard label="Comments analyzed" value={formatNumber(result.analyzedCount)} detail={`${formatNumber(result.totalFetched)} fetched incl. replies · API total ${formatNumber(result.video.commentCount)}`} icon={MessageCircle} accent="#2ab673" />
         <StatCard label="Video views" value={formatNumber(result.video.viewCount)} detail="public YouTube count" icon={Eye} accent="#5e8ee4" />
         <StatCard label="Average signal" value={`${result.averageSentimentScore > 0 ? "+" : ""}${result.averageSentimentScore}`} detail={avgLabel} icon={Activity} accent="#f2b84b" />
         <StatCard label="Language filter" value={result.languageMode === "marathi" ? "Marathi" : "All"} detail={`${result.skippedCount} comments outside signal`} icon={Languages} accent="#9b7ede" />

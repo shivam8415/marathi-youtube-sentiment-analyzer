@@ -79,6 +79,7 @@ type YouTubeCommentResponse = {
   items?: Array<{
     id?: string;
     snippet?: {
+      totalReplyCount?: number;
       topLevelComment?: {
         id?: string;
         snippet?: {
@@ -89,6 +90,32 @@ type YouTubeCommentResponse = {
           authorDisplayName?: string;
         };
       };
+    };
+    replies?: {
+      comments?: Array<{
+        id?: string;
+        snippet?: {
+          textOriginal?: string;
+          textDisplay?: string;
+          likeCount?: number;
+          publishedAt?: string;
+          authorDisplayName?: string;
+        };
+      }>;
+    };
+  }>;
+};
+
+type YouTubeReplyResponse = {
+  nextPageToken?: string;
+  items?: Array<{
+    id?: string;
+    snippet?: {
+      textOriginal?: string;
+      textDisplay?: string;
+      likeCount?: number;
+      publishedAt?: string;
+      authorDisplayName?: string;
     };
   }>;
 };
@@ -370,17 +397,52 @@ export async function fetchYouTubeAnalysis(url: string, maxComments = 200): Prom
   let pageToken = "";
   while (comments.length < maxComments) {
     const pageSize = Math.min(100, maxComments - comments.length);
-    const page = await fetchJson<YouTubeCommentResponse>(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet&videoId=${encodeURIComponent(id)}&maxResults=${pageSize}&order=relevance${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}&key=${key}`);
+    const page = await fetchJson<YouTubeCommentResponse>(`https://www.googleapis.com/youtube/v3/commentThreads?part=snippet,replies&videoId=${encodeURIComponent(id)}&maxResults=${pageSize}&order=relevance${pageToken ? `&pageToken=${encodeURIComponent(pageToken)}` : ""}&key=${key}`);
     for (const entry of page.items ?? []) {
+      if (comments.length >= maxComments) break;
       const snippet = entry.snippet?.topLevelComment?.snippet;
       if (!snippet) continue;
+      const parentId = entry.id ?? entry.snippet?.topLevelComment?.id;
       comments.push({
-        id: entry.id ?? entry.snippet?.topLevelComment?.id ?? `comment-${comments.length + 1}`,
+        id: parentId ?? `comment-${comments.length + 1}`,
         text: snippet.textOriginal ?? snippet.textDisplay ?? "",
         likeCount: snippet.likeCount,
         publishedAt: snippet.publishedAt,
         authorDisplayName: snippet.authorDisplayName,
       });
+      const inlineReplies = entry.replies?.comments ?? [];
+      for (const reply of inlineReplies) {
+        if (comments.length >= maxComments) break;
+        const replySnippet = reply.snippet;
+        if (!replySnippet) continue;
+        comments.push({
+          id: reply.id ?? `reply-${comments.length + 1}`,
+          text: replySnippet.textOriginal ?? replySnippet.textDisplay ?? "",
+          likeCount: replySnippet.likeCount,
+          publishedAt: replySnippet.publishedAt,
+          authorDisplayName: replySnippet.authorDisplayName,
+        });
+      }
+      if (parentId && (entry.snippet?.totalReplyCount ?? 0) > inlineReplies.length && comments.length < maxComments) {
+        let replyPageToken = "";
+        do {
+          const replySize = Math.min(100, maxComments - comments.length);
+          const replyPage = await fetchJson<YouTubeReplyResponse>(`https://www.googleapis.com/youtube/v3/comments?part=snippet&parentId=${encodeURIComponent(parentId)}&maxResults=${replySize}${replyPageToken ? `&pageToken=${encodeURIComponent(replyPageToken)}` : ""}&key=${key}`);
+          for (const reply of replyPage.items ?? []) {
+            if (comments.length >= maxComments) break;
+            const replySnippet = reply.snippet;
+            if (!replySnippet) continue;
+            comments.push({
+              id: reply.id ?? `reply-${comments.length + 1}`,
+              text: replySnippet.textOriginal ?? replySnippet.textDisplay ?? "",
+              likeCount: replySnippet.likeCount,
+              publishedAt: replySnippet.publishedAt,
+              authorDisplayName: replySnippet.authorDisplayName,
+            });
+          }
+          replyPageToken = replyPage.nextPageToken ?? "";
+        } while (replyPageToken && comments.length < maxComments);
+      }
     }
     if (!page.nextPageToken || !(page.items?.length)) break;
     pageToken = page.nextPageToken;
