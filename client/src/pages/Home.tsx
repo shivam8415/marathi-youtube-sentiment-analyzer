@@ -244,6 +244,29 @@ function EvaluationCard({ result }: { result: AnalysisResult }) {
   );
 }
 
+function LanguageSignalsCard({ result }: { result: AnalysisResult }) {
+  const rows = [
+    ["Devanagari Marathi", result.languageCounts.marathi, "#2ab673"],
+    ["Roman Marathi / mixed", result.languageCounts.mixed, "#5e8ee4"],
+    ["Other / noisy", result.languageCounts.other, "#9aa7b7"],
+  ] as const;
+  const total = Math.max(1, result.totalFetched);
+  return (
+    <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]">
+      <CardHeader className="pb-2"><p className="section-kicker">Language signals</p><CardTitle className="mt-2 text-lg text-[#19342a]">What kind of text arrived?</CardTitle><p className="mt-1 text-xs leading-5 text-[#718078]">The sentiment chart uses Marathi and mixed-language comments; all fetched comments remain available below.</p></CardHeader>
+      <CardContent className="space-y-4">
+        {rows.map(([label, value, color]) => <div key={label}><div className="mb-1.5 flex items-center justify-between text-xs"><span className="font-medium text-[#53655b]">{label}</span><span className="font-mono text-[#19342a]">{value} · {Math.round((value / total) * 100)}%</span></div><div className="h-2 overflow-hidden rounded-full bg-[#edf2ee]"><div className="h-full rounded-full" style={{ width: `${(value / total) * 100}%`, backgroundColor: color }} /></div></div>)}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PreprocessingCard({ result }: { result: AnalysisResult }) {
+  return (
+    <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="pb-2"><p className="section-kicker">Preprocessing trace</p><CardTitle className="mt-2 text-lg text-[#19342a]">From raw text to tokens</CardTitle></CardHeader><CardContent className="space-y-3">{result.preprocessingExamples.map((example, index) => <div key={`${example.original}-${index}`} className="rounded-xl bg-[#f7faf7] p-3 text-xs leading-5"><div className="font-semibold text-[#53655b]">Original</div><div className="text-[#718078]">{example.original}</div><div className="mt-2 font-semibold text-[#53655b]">Cleaned</div><div className="text-[#718078]">{example.cleaned}</div><div className="mt-2 font-semibold text-[#53655b]">Tokens</div><div className="font-mono text-[11px] text-[#3e7552]">{example.tokens.join(" · ") || "—"}</div></div>)}</CardContent></Card>
+  );
+}
+
 function CommentRow({ comment }: { comment: AnalysisResult["comments"][number] }) {
   const tone = sentimentCopy[comment.sentiment];
   return (
@@ -259,17 +282,35 @@ function CommentRow({ comment }: { comment: AnalysisResult["comments"][number] }
 }
 
 function ResultsView({ result }: { result: AnalysisResult }) {
+  const [query, setQuery] = useState("");
+  const [languageFilter, setLanguageFilter] = useState<"all" | "marathi" | "mixed" | "other">("all");
+  const [sentimentFilter, setSentimentFilter] = useState<"all" | "positive" | "negative" | "neutral">("all");
+  const [emotionFilter, setEmotionFilter] = useState<"all" | "happy" | "sad" | "angry" | "fear" | "surprise" | "neutral">("all");
+  const [sortBy, setSortBy] = useState<"recent" | "likes" | "score">("recent");
+  const [page, setPage] = useState(1);
+  const allComments = result.allComments ?? result.comments;
+  const filteredComments = useMemo(() => {
+    const needle = query.trim().toLocaleLowerCase("mr-IN");
+    return [...allComments].filter((comment) => {
+      const matchesQuery = !needle || `${comment.text} ${comment.authorDisplayName ?? ""}`.toLocaleLowerCase("mr-IN").includes(needle);
+      return matchesQuery && (languageFilter === "all" || comment.language === languageFilter) && (sentimentFilter === "all" || comment.sentiment === sentimentFilter) && (emotionFilter === "all" || comment.emotion === emotionFilter);
+    }).sort((a, b) => sortBy === "likes" ? b.likeCount - a.likeCount : sortBy === "score" ? b.sentimentScore - a.sentimentScore : String(b.publishedAt ?? "").localeCompare(String(a.publishedAt ?? "")));
+  }, [allComments, emotionFilter, languageFilter, query, sentimentFilter, sortBy]);
+  const pageSize = 10;
+  const pageCount = Math.max(1, Math.ceil(filteredComments.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const visibleComments = filteredComments.slice((safePage - 1) * pageSize, safePage * pageSize);
   const positiveShare = Math.round(((result.sentimentDistribution.find((item) => item.label === "Positive")?.value ?? 0) / Math.max(1, result.analyzedCount)) * 100);
   const avgLabel = result.averageSentimentScore > 0 ? "leans positive" : result.averageSentimentScore < 0 ? "leans negative" : "balanced tone";
   const exportJson = () => downloadFile(`marathi-lens-${result.video.id}.json`, JSON.stringify(result, null, 2), "application/json");
   const exportCsv = () => {
     const header = ["comment", "sentiment", "emotion", "confidence", "likes", "language", "author", "publishedAt"].join(",");
-    const rows = result.comments.map((comment) => [comment.text, comment.sentiment, comment.emotion, Math.round(comment.confidence * 100) + "%", comment.likeCount, comment.language, comment.authorDisplayName, comment.publishedAt].map(csvCell).join(","));
+    const rows = allComments.map((comment) => [comment.text, comment.sentiment, comment.emotion, Math.round(comment.confidence * 100) + "%", comment.likeCount, comment.language, comment.authorDisplayName, comment.publishedAt].map(csvCell).join(","));
     downloadFile(`marathi-lens-${result.video.id}-comments.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
   };
   const exportAnnotationTemplate = () => {
     const header = ["commentId", "comment", "predictedSentiment", "predictedEmotion", "goldSentiment", "goldEmotion", "annotatorNotes"].join(",");
-    const rows = result.comments.map((comment) => [comment.id, comment.text, comment.sentiment, comment.emotion, "", "", ""].map(csvCell).join(","));
+    const rows = allComments.map((comment) => [comment.id, comment.text, comment.sentiment, comment.emotion, "", "", ""].map(csvCell).join(","));
     downloadFile(`marathi-lens-${result.video.id}-annotation-template.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
   };
   return (
@@ -290,11 +331,12 @@ function ResultsView({ result }: { result: AnalysisResult }) {
         <StatCard label="Language filter" value={result.languageMode === "marathi" ? "Marathi" : "All"} detail={`${result.skippedCount} comments outside signal`} icon={Languages} accent="#9b7ede" />
       </div>
       <EvaluationCard result={result} />
+      <div className="grid gap-5 lg:grid-cols-2"><LanguageSignalsCard result={result} /><PreprocessingCard result={result} /></div>
       <Card className="border-0 bg-[#fffaf0] shadow-[0_10px_30px_rgba(44,73,58,0.04)]"><CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between"><div><p className="section-kicker text-[#b9822e]">YouTube evaluation workflow</p><h3 className="mt-2 text-lg font-semibold text-[#19342a]">Create your manually labeled test set</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#7f715c]">Use this template to annotate 100–150 real comments with gold sentiment, gold emotion, and notes. Keep this YouTube set separate from the benchmark dataset in your final report.</p></div><Button onClick={exportAnnotationTemplate} variant="outline" className="shrink-0 rounded-xl border-[#ead7ad] bg-white text-[#8b6424] hover:bg-[#fff5dc]"><FileSpreadsheet size={15} className="mr-2" />Annotation template</Button></CardContent></Card>
       <div className="grid gap-5 lg:grid-cols-2"><DistributionCard result={result} /><EmotionCard result={result} /></div>
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#deebe0] bg-[#f8fcf8] px-4 py-3"><div className="flex items-center gap-2 text-xs text-[#607369]"><Download size={15} className="text-[#5d9a73]" />Save this scan for your project report</div><div className="flex gap-2"><Button onClick={exportCsv} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><FileSpreadsheet size={14} className="mr-1.5" />CSV comments</Button><Button onClick={exportJson} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><Download size={14} className="mr-1.5" />JSON report</Button></div></div>
       <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
-        <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1"><div><p className="section-kicker">Conversation sample</p><CardTitle className="mt-2 text-lg text-[#19342a]">What viewers are saying</CardTitle></div><span className="rounded-full bg-[#f0f8f2] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5d9a73]">{result.comments.length} shown</span></CardHeader><CardContent className="pt-1">{result.comments.slice(0, 5).map((comment) => <CommentRow key={comment.id} comment={comment} />)}</CardContent></Card>
+        <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1"><div><p className="section-kicker">Conversation browser</p><CardTitle className="mt-2 text-lg text-[#19342a]">Search and inspect all fetched comments</CardTitle></div><span className="rounded-full bg-[#f0f8f2] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5d9a73]">{filteredComments.length} matches</span></CardHeader><CardContent className="pt-1"><div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3"><input value={query} onChange={(event) => { setQuery(event.target.value); setPage(1); }} placeholder="Search comment or author…" className="h-10 rounded-lg border border-[#dce9df] bg-[#f8fcf8] px-3 text-xs text-[#29483a] outline-none focus:border-[#9fd2ae]" aria-label="Search comments" /><select value={languageFilter} onChange={(event) => { setLanguageFilter(event.target.value as typeof languageFilter); setPage(1); }} className="h-10 rounded-lg border border-[#dce9df] bg-[#f8fcf8] px-3 text-xs text-[#53655b]" aria-label="Filter by language"><option value="all">All languages</option><option value="marathi">Devanagari Marathi</option><option value="mixed">Roman Marathi / mixed</option><option value="other">Other / noisy</option></select><select value={sentimentFilter} onChange={(event) => { setSentimentFilter(event.target.value as typeof sentimentFilter); setPage(1); }} className="h-10 rounded-lg border border-[#dce9df] bg-[#f8fcf8] px-3 text-xs text-[#53655b]" aria-label="Filter by sentiment"><option value="all">All sentiments</option><option value="positive">Positive</option><option value="negative">Negative</option><option value="neutral">Neutral</option></select><select value={emotionFilter} onChange={(event) => { setEmotionFilter(event.target.value as typeof emotionFilter); setPage(1); }} className="h-10 rounded-lg border border-[#dce9df] bg-[#f8fcf8] px-3 text-xs text-[#53655b]" aria-label="Filter by emotion"><option value="all">All emotions</option>{Object.entries(emotionCopy).map(([value, copy]) => <option key={value} value={value}>{copy.label}</option>)}</select><select value={sortBy} onChange={(event) => setSortBy(event.target.value as typeof sortBy)} className="h-10 rounded-lg border border-[#dce9df] bg-[#f8fcf8] px-3 text-xs text-[#53655b]" aria-label="Sort comments"><option value="recent">Most recent</option><option value="likes">Most liked</option><option value="score">Sentiment score</option></select></div><div className="mt-3">{visibleComments.map((comment) => <CommentRow key={comment.id} comment={comment} />)}</div><div className="flex items-center justify-between border-t border-[#eef2ef] pt-3 text-xs text-[#829187]"><span>Page {safePage} of {pageCount} · showing {visibleComments.length}</span><div className="flex gap-2"><Button onClick={() => setPage((value) => Math.max(1, value - 1))} disabled={safePage === 1} variant="outline" className="h-8 rounded-lg border-[#dce9df] bg-white px-3 text-xs">Previous</Button><Button onClick={() => setPage((value) => Math.min(pageCount, value + 1))} disabled={safePage === pageCount} variant="outline" className="h-8 rounded-lg border-[#dce9df] bg-white px-3 text-xs">Next</Button></div></div></CardContent></Card>
         <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="pb-1"><p className="section-kicker">Lexical pulse</p><CardTitle className="mt-2 text-lg text-[#19342a]">Most repeated words</CardTitle></CardHeader><CardContent><div className="space-y-4 pt-3">{result.topWords.length ? result.topWords.map((item, index) => <div key={item.word}><div className="mb-1.5 flex items-center justify-between"><span className="font-mono text-xs text-[#4c6155]">{String(index + 1).padStart(2, "0")} <span className="ml-2 font-sans font-semibold text-[#29483a]">{item.word}</span></span><span className="font-mono text-[11px] text-[#91a098]">{item.count}×</span></div><div className="h-2 overflow-hidden rounded-full bg-[#edf2ee]"><div className="h-full rounded-full bg-[#66b77d]" style={{ width: `${Math.max(12, (item.count / result.topWords[0].count) * 100)}%` }} /></div></div>) : <p className="py-10 text-center text-sm text-[#829187]">No repeated words yet.</p>}</div><div className="mt-7 rounded-xl bg-[#f7faf7] p-3 text-xs leading-5 text-[#718078]"><FileText size={14} className="mb-1 text-[#5d9a73]" />Lexicon-based signals are designed to be transparent and easy to explain in your academic project.</div></CardContent></Card>
       </div>
     </div>

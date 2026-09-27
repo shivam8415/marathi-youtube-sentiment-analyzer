@@ -50,6 +50,19 @@ describe("Marathi analysis engine", () => {
     expect(result.languageMode).toBe("marathi");
   });
 
+  it("preserves all fetched comments and exposes language counts", () => {
+    const result = analyzeRawComments([
+      { id: "dev", text: "हा व्हिडिओ खूप छान आहे" },
+      { id: "roman", text: "khup chan video ahe" },
+      { id: "eng", text: "This is a useful video" },
+    ], { id: "test", url: "https://youtu.be/test", title: "Test", channelTitle: "Test" }, "demo");
+
+    expect(result.allComments).toHaveLength(3);
+    expect(result.comments).toHaveLength(2);
+    expect(result.languageCounts).toEqual({ marathi: 1, mixed: 1, other: 1 });
+    expect(result.preprocessingExamples[0]?.tokens.length).toBeGreaterThan(0);
+  });
+
   it("returns a complete demo result without external services", () => {
     const result = createDemoAnalysis("https://www.youtube.com/watch?v=demo12345");
     expect(result.source).toBe("demo");

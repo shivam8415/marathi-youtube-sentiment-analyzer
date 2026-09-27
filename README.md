@@ -8,7 +8,7 @@ A full-stack Marathi NLP dashboard that accepts a YouTube video URL, retrieves p
 2. Click **Analyze comments**.
 3. The server paginates toward YouTube’s reported total public comments, including replies, with a 5,000-comment safety ceiling.
 4. Marathi language signals are selected and classified; the dashboard also shows the fetched total separately.
-5. The dashboard shows sentiment balance, emotion fingerprint, repeated words, and comment examples.
+5. The dashboard shows sentiment balance, emotion fingerprint, repeated words, preprocessing examples, and comment examples.
 
 The results also include a small TF-IDF + Naive Bayes holdout comparison, Roman-script Marathi detection (for phrases such as `khup chan video`), and one-click JSON/CSV downloads for your project report.
 
@@ -40,12 +40,21 @@ pnpm build
 
 - URL parsing for common YouTube formats
 - Marathi / mixed-language heuristic filtering
+- Three-way language view: Devanagari Marathi, Roman Marathi / mixed, and other/noisy
 - Regex cleanup and tokenization
 - Marathi stop-word removal
 - Explainable lexicon sentiment scoring with negation handling
 - Rule-based emotion scoring
 - TF-IDF + Naive Bayes evaluation panel with accuracy, precision, recall, macro-F1, and confusion matrix
 - Downloadable annotation template for manually labeling 100–150 real YouTube comments
+- Search, sentiment/emotion filters, language filters, sorting, and paginated browsing of all fetched comments
 - Recharts visualizations for the dashboard
 
 This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with a real Marathi corpus or IndicBERT. See [MARATHI_NLP_RESOURCES.md](MARATHI_NLP_RESOURCES.md) for verified real datasets, tools, API references, and licensing caveats.
+
+## Limitations to report academically
+
+- YouTube's reported total may be larger than the accessible API response because comments can be deleted, moderated, hidden, or unavailable to the API.
+- The live rule-based labels are explainable predictions, not gold annotations. A manually labelled YouTube test set should be used for final domain evaluation.
+- Roman Marathi spelling is inconsistent, and sarcasm, emojis, very short replies, and Marathi-English code-mixing remain difficult cases.
+- L3Cube-MahaSent-MD is a real Marathi benchmark corpus but is not a dedicated YouTube-comment gold dataset; benchmark and live-video results must be reported separately.

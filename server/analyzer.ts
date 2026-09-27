@@ -51,6 +51,9 @@ export type AnalysisResult = {
   skippedCount: number;
   languageMode: "marathi" | "all";
   comments: AnalyzedComment[];
+  allComments: AnalyzedComment[];
+  languageCounts: { marathi: number; mixed: number; other: number };
+  preprocessingExamples: Array<{ original: string; cleaned: string; tokens: string[] }>;
   sentimentDistribution: { label: string; value: number; color: string }[];
   emotionDistribution: { label: string; value: number; color: string }[];
   topWords: WordCount[];
@@ -382,6 +385,15 @@ export function analyzeRawComments(rawComments: RawComment[], metadata: Analysis
   const topWords = Array.from(wordCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([word, count]) => ({ word, count }));
   const averageSentimentScore = comments.length ? Number((comments.reduce((total, comment) => total + comment.sentimentScore, 0) / comments.length).toFixed(2)) : 0;
   const modelComparison = buildModelComparison(comments);
+  const languageCounts = {
+    marathi: classified.filter((comment) => comment.language === "marathi").length,
+    mixed: classified.filter((comment) => comment.language === "mixed").length,
+    other: classified.filter((comment) => comment.language === "other").length,
+  };
+  const preprocessingExamples = rawComments.slice(0, 3).map((comment) => {
+    const cleaned = cleanText(comment.text);
+    return { original: comment.text, cleaned, tokens: tokenize(cleaned).slice(0, 12) };
+  });
   return {
     source,
     video: metadata,
@@ -390,6 +402,9 @@ export function analyzeRawComments(rawComments: RawComment[], metadata: Analysis
     skippedCount: Math.max(0, rawComments.length - comments.length),
     languageMode,
     comments,
+    allComments: classified,
+    languageCounts,
+    preprocessingExamples,
     sentimentDistribution,
     emotionDistribution,
     topWords,
