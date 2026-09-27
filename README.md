@@ -10,6 +10,8 @@ A full-stack Marathi NLP dashboard that accepts a YouTube video URL, retrieves p
 4. Marathi language signals are selected and classified.
 5. The dashboard shows sentiment balance, emotion fingerprint, repeated words, and comment examples.
 
+The results also include a small TF-IDF + Naive Bayes holdout comparison, Roman-script Marathi detection (for phrases such as `khup chan video`), and one-click JSON/CSV downloads for your project report.
+
 There is no CSV upload in the user workflow. The browser sends only the URL to the server; the API key never reaches the browser.
 
 ## Live setup
@@ -40,6 +42,7 @@ pnpm build
 - Marathi stop-word removal
 - Explainable lexicon sentiment scoring with negation handling
 - Rule-based emotion scoring
+- TF-IDF + Naive Bayes comparison panel with a transparent weak-label disclaimer
 - Recharts visualizations for the dashboard
 
 This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with TF-IDF + Naive Bayes or IndicBERT.

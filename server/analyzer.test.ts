@@ -23,6 +23,18 @@ describe("Marathi analysis engine", () => {
     expect(result.dominantSentiment).toBe("positive");
     expect(result.comments.map((comment) => comment.sentiment)).toEqual(["positive", "positive", "negative", "neutral"]);
     expect(result.comments[0]?.emotion).toBe("happy");
+    expect(result.modelComparison.vocabularySize).toBeGreaterThan(0);
+    expect(result.modelComparison.trainingComments).toBeGreaterThan(0);
+  });
+
+  it("recognizes common Roman-script Marathi phrases as mixed Marathi", () => {
+    const result = analyzeRawComments([
+      { id: "roman", text: "khup chan video ahe, mala avdla" },
+      { id: "english", text: "This is a useful video" },
+    ], { id: "test", url: "https://youtu.be/test", title: "Test", channelTitle: "Test" }, "demo");
+
+    expect(result.comments[0]?.language).toBe("mixed");
+    expect(result.languageMode).toBe("marathi");
   });
 
   it("returns a complete demo result without external services", () => {

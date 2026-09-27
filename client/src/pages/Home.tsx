@@ -10,9 +10,11 @@ import {
   CheckCircle2,
   ChevronRight,
   Clock3,
+  Download,
   ExternalLink,
   Eye,
   FileText,
+  FileSpreadsheet,
   Flame,
   Languages,
   Loader2,
@@ -76,6 +78,19 @@ function formatDate(value?: string) {
 function initials(name?: string) {
   if (!name) return "प्र";
   return name.trim().slice(0, 2);
+}
+
+function downloadFile(filename: string, content: string, type: string) {
+  const blob = new Blob([content], { type });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = filename;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+function csvCell(value: unknown) {
+  return `"${String(value ?? "").replace(/"/g, '""')}"`;
 }
 
 function StatCard({ label, value, detail, icon: Icon, accent }: { label: string; value: string; detail: string; icon: typeof Eye; accent: string }) {
@@ -209,6 +224,12 @@ function CommentRow({ comment }: { comment: AnalysisResult["comments"][number] }
 function ResultsView({ result }: { result: AnalysisResult }) {
   const positiveShare = Math.round(((result.sentimentDistribution.find((item) => item.label === "Positive")?.value ?? 0) / Math.max(1, result.analyzedCount)) * 100);
   const avgLabel = result.averageSentimentScore > 0 ? "leans positive" : result.averageSentimentScore < 0 ? "leans negative" : "balanced tone";
+  const exportJson = () => downloadFile(`marathi-lens-${result.video.id}.json`, JSON.stringify(result, null, 2), "application/json");
+  const exportCsv = () => {
+    const header = ["comment", "sentiment", "emotion", "confidence", "likes", "language", "author", "publishedAt"].join(",");
+    const rows = result.comments.map((comment) => [comment.text, comment.sentiment, comment.emotion, Math.round(comment.confidence * 100) + "%", comment.likeCount, comment.language, comment.authorDisplayName, comment.publishedAt].map(csvCell).join(","));
+    downloadFile(`marathi-lens-${result.video.id}-comments.csv`, [header, ...rows].join("\n"), "text/csv;charset=utf-8");
+  };
   return (
     <div className="space-y-5">
       <Card className="overflow-hidden border-0 bg-[#1d4d35] text-white shadow-[0_15px_40px_rgba(27,75,48,0.18)]">
@@ -226,7 +247,9 @@ function ResultsView({ result }: { result: AnalysisResult }) {
         <StatCard label="Average signal" value={`${result.averageSentimentScore > 0 ? "+" : ""}${result.averageSentimentScore}`} detail={avgLabel} icon={Activity} accent="#f2b84b" />
         <StatCard label="Language filter" value={result.languageMode === "marathi" ? "Marathi" : "All"} detail={`${result.skippedCount} comments outside signal`} icon={Languages} accent="#9b7ede" />
       </div>
+      <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardContent className="flex flex-col gap-4 p-5 lg:flex-row lg:items-center lg:justify-between"><div><p className="section-kicker">Academic comparison</p><h3 className="mt-2 text-lg font-semibold text-[#19342a]">TF-IDF + Naive Bayes baseline</h3><p className="mt-1 max-w-2xl text-xs leading-5 text-[#718078]">A small holdout comparison is calculated from this scan. Use manually annotated comments for the final report accuracy.</p></div><div className="grid grid-cols-3 gap-3"><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#246b45]">{result.modelComparison.tfidfNaiveBayesAccuracy}%</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">NB holdout</div></div><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#5e8ee4]">{result.modelComparison.vocabularySize}</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">vocabulary</div></div><div className="rounded-xl bg-[#f4faf5] px-4 py-3 text-center"><div className="font-mono text-xl text-[#f2b84b]">{result.modelComparison.ruleBasedCoverage}%</div><div className="mt-1 text-[9px] font-bold uppercase tracking-wider text-[#829187]">language signal</div></div></div></CardContent></Card>
       <div className="grid gap-5 lg:grid-cols-2"><DistributionCard result={result} /><EmotionCard result={result} /></div>
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[#deebe0] bg-[#f8fcf8] px-4 py-3"><div className="flex items-center gap-2 text-xs text-[#607369]"><Download size={15} className="text-[#5d9a73]" />Save this scan for your project report</div><div className="flex gap-2"><Button onClick={exportCsv} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><FileSpreadsheet size={14} className="mr-1.5" />CSV comments</Button><Button onClick={exportJson} variant="outline" className="h-9 rounded-lg border-[#d5e6d8] bg-white px-3 text-xs font-semibold text-[#3e7552] hover:bg-[#f0f8f2]"><Download size={14} className="mr-1.5" />JSON report</Button></div></div>
       <div className="grid gap-5 xl:grid-cols-[1.15fr_0.85fr]">
         <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-1"><div><p className="section-kicker">Conversation sample</p><CardTitle className="mt-2 text-lg text-[#19342a]">What viewers are saying</CardTitle></div><span className="rounded-full bg-[#f0f8f2] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wider text-[#5d9a73]">{result.comments.length} shown</span></CardHeader><CardContent className="pt-1">{result.comments.slice(0, 5).map((comment) => <CommentRow key={comment.id} comment={comment} />)}</CardContent></Card>
         <Card className="border-0 bg-white/80 shadow-[0_10px_30px_rgba(44,73,58,0.05)]"><CardHeader className="pb-1"><p className="section-kicker">Lexical pulse</p><CardTitle className="mt-2 text-lg text-[#19342a]">Most repeated words</CardTitle></CardHeader><CardContent><div className="space-y-4 pt-3">{result.topWords.length ? result.topWords.map((item, index) => <div key={item.word}><div className="mb-1.5 flex items-center justify-between"><span className="font-mono text-xs text-[#4c6155]">{String(index + 1).padStart(2, "0")} <span className="ml-2 font-sans font-semibold text-[#29483a]">{item.word}</span></span><span className="font-mono text-[11px] text-[#91a098]">{item.count}×</span></div><div className="h-2 overflow-hidden rounded-full bg-[#edf2ee]"><div className="h-full rounded-full bg-[#66b77d]" style={{ width: `${Math.max(12, (item.count / result.topWords[0].count) * 100)}%` }} /></div></div>) : <p className="py-10 text-center text-sm text-[#829187]">No repeated words yet.</p>}</div><div className="mt-7 rounded-xl bg-[#f7faf7] p-3 text-xs leading-5 text-[#718078]"><FileText size={14} className="mb-1 text-[#5d9a73]" />Lexicon-based signals are designed to be transparent and easy to explain in your academic project.</div></CardContent></Card>

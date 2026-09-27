@@ -18,6 +18,15 @@ export type AnalyzedComment = {
 
 export type WordCount = { word: string; count: number };
 
+export type ModelComparison = {
+  tfidfNaiveBayesAccuracy: number;
+  ruleBasedCoverage: number;
+  vocabularySize: number;
+  trainingComments: number;
+  testingComments: number;
+  note: string;
+};
+
 export type AnalysisResult = {
   source: "youtube" | "demo";
   video: {
@@ -41,6 +50,7 @@ export type AnalysisResult = {
   dominantSentiment: Sentiment;
   dominantEmotion: Emotion;
   averageSentimentScore: number;
+  modelComparison: ModelComparison;
   generatedAt: string;
 };
 
@@ -178,7 +188,7 @@ function isMarathi(text: string): "marathi" | "mixed" | "other" {
   const normalized = text.toLocaleLowerCase("mr-IN");
   const devanagariChars = (normalized.match(/[\u0900-\u097f]/g) ?? []).length;
   const latinChars = (normalized.match(/[a-z]/g) ?? []).length;
-  const marathiMarkers = ["आहे", "मला", "खूप", "तुम्ही", "माहिती", "व्हिडिओ", "छान", "नाही", "आवड", "साठी", "खरंच", "khup", "chan", "mast", "awad", "mahit", "sundar", "nahi"];
+  const marathiMarkers = ["आहे", "मला", "खूप", "तुम्ही", "माहिती", "व्हिडिओ", "छान", "नाही", "आवड", "साठी", "खरंच", "khup", "chan", "chhan", "mast", "awad", "avad", "mahit", "mahiti", "sundar", "nahi", "ahe", "tumhi", "mala", "marathi", "kay", "kasa", "kashi", "video khup", "changla", "changli", "avdla", "dhanyavad"];
   const markerHit = marathiMarkers.some((term) => normalized.includes(term));
   if (devanagariChars >= 3 && (devanagariChars >= latinChars * 0.25 || markerHit)) return latinChars > devanagariChars ? "mixed" : "marathi";
   if (markerHit) return "mixed";
@@ -231,6 +241,50 @@ function classifyEmotion(text: string, sentiment: Sentiment): Emotion {
   return best.emotion;
 }
 
+function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
+  const documents = comments.map((comment) => ({ tokens: tokenize(comment.text), label: comment.sentiment }));
+  const vocabulary = Array.from(new Set(documents.flatMap((document) => document.tokens.filter((token) => token.length > 1 && !MARATHI_STOP_WORDS.has(token)))));
+  const split = Math.max(1, Math.floor(documents.length * 0.8));
+  const training = documents.slice(0, split);
+  const testing = documents.slice(split);
+  if (vocabulary.length === 0 || testing.length === 0 || training.length < 2) {
+    return { tfidfNaiveBayesAccuracy: 0, ruleBasedCoverage: 0, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Add more labeled comments for a meaningful holdout comparison." };
+  }
+  const documentFrequency = new Map<string, number>();
+  documents.forEach((document) => Array.from(new Set(document.tokens)).forEach((token) => documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1)));
+  const idf = (token: string) => Math.log((documents.length + 1) / ((documentFrequency.get(token) ?? 0) + 1)) + 1;
+  const vector = (tokens: string[]) => {
+    const counts = new Map<string, number>();
+    tokens.forEach((token) => counts.set(token, (counts.get(token) ?? 0) + 1));
+    return vocabulary.map((token) => (counts.get(token) ?? 0) * idf(token));
+  };
+  const classCounts = new Map<Sentiment, number>();
+  const tokenSums = new Map<Sentiment, number[]>();
+  const tokenTotals = new Map<Sentiment, number>();
+  training.forEach((document) => {
+    classCounts.set(document.label, (classCounts.get(document.label) ?? 0) + 1);
+    const values = vector(document.tokens);
+    const sums = tokenSums.get(document.label) ?? vocabulary.map(() => 0);
+    values.forEach((value, index) => { sums[index] += value; });
+    tokenSums.set(document.label, sums);
+    tokenTotals.set(document.label, (tokenTotals.get(document.label) ?? 0) + values.reduce((sum, value) => sum + value, 0));
+  });
+  const classes: Sentiment[] = ["positive", "negative", "neutral"];
+  const predict = (tokens: string[]): Sentiment => {
+    const values = vector(tokens);
+    return classes.reduce((best, label) => {
+      const prior = Math.log(((classCounts.get(label) ?? 0) + 1) / (training.length + classes.length));
+      const sums = tokenSums.get(label) ?? vocabulary.map(() => 0);
+      const total = tokenTotals.get(label) ?? 0;
+      const score = values.reduce((sum, value, index) => sum + value * Math.log((sums[index] + 1) / (total + vocabulary.length)), prior);
+      return score > best.score ? { label, score } : best;
+    }, { label: "neutral" as Sentiment, score: Number.NEGATIVE_INFINITY }).label;
+  };
+  const correct = testing.filter((document) => predict(document.tokens) === document.label).length;
+  const coverage = Math.round((comments.filter((comment) => comment.language !== "other").length / Math.max(1, comments.length)) * 100);
+  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), ruleBasedCoverage: coverage, vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, note: "Holdout score uses current comments with transparent lexicon labels; use manually annotated data for final academic accuracy." };
+}
+
 function classifyComment(comment: RawComment): AnalyzedComment {
   const text = cleanText(comment.text);
   const language = isMarathi(text);
@@ -272,6 +326,7 @@ export function analyzeRawComments(rawComments: RawComment[], metadata: Analysis
   }));
   const topWords = Array.from(wordCounts.entries()).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([word, count]) => ({ word, count }));
   const averageSentimentScore = comments.length ? Number((comments.reduce((total, comment) => total + comment.sentimentScore, 0) / comments.length).toFixed(2)) : 0;
+  const modelComparison = buildModelComparison(comments);
   return {
     source,
     video: metadata,
@@ -286,6 +341,7 @@ export function analyzeRawComments(rawComments: RawComment[], metadata: Analysis
     dominantSentiment,
     dominantEmotion,
     averageSentimentScore,
+    modelComparison,
     generatedAt: new Date().toISOString(),
   };
 }
