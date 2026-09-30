@@ -21,6 +21,10 @@ export type WordCount = { word: string; count: number };
 
 export type ModelComparison = {
   tfidfNaiveBayesAccuracy: number;
+  tfidfLogisticRegressionAccuracy: number;
+  logisticPrecision: number;
+  logisticRecall: number;
+  logisticMacroF1: number;
   precision: number;
   recall: number;
   macroF1: number;
@@ -280,7 +284,7 @@ function classifyEmotion(text: string, sentiment: Sentiment): Emotion {
 
 function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
   const documents = REAL_MARATHI_TRAINING_DATASET.map((example) => ({ tokens: tokenize(example.text), label: example.sentiment }));
-  const vocabulary = Array.from(new Set(documents.flatMap((document) => document.tokens.filter((token) => token.length > 1 && !MARATHI_STOP_WORDS.has(token)))));
+  const vocabulary = Array.from(new Set(documents.flatMap((document) => document.tokens.filter((token) => token.length > 1 && !MARATHI_STOP_WORDS.has(token))))).slice(0, 800);
   const classes: Sentiment[] = ["positive", "negative", "neutral"];
   const training = classes.flatMap((label) => {
     const classDocuments = documents.filter((document) => document.label === label);
@@ -292,7 +296,7 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
   });
   const emptyMatrix = classes.map((actual) => ({ actual, positive: 0, negative: 0, neutral: 0 }));
   if (vocabulary.length === 0 || testing.length === 0 || training.length < 2) {
-    return { tfidfNaiveBayesAccuracy: 0, precision: 0, recall: 0, macroF1: 0, ruleBasedCoverage: 0, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix: emptyMatrix, note: "Add more labeled comments for a meaningful holdout comparison." };
+    return { tfidfNaiveBayesAccuracy: 0, tfidfLogisticRegressionAccuracy: 0, precision: 0, recall: 0, macroF1: 0, logisticPrecision: 0, logisticRecall: 0, logisticMacroF1: 0, ruleBasedCoverage: 0, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix: emptyMatrix, note: "Add more labeled comments for a meaningful holdout comparison." };
   }
   const documentFrequency = new Map<string, number>();
   documents.forEach((document) => Array.from(new Set(document.tokens)).forEach((token) => documentFrequency.set(token, (documentFrequency.get(token) ?? 0) + 1)));
@@ -325,6 +329,42 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
   };
   const predictions = testing.map((document) => ({ actual: document.label, predicted: predict(document.tokens) }));
   const correct = predictions.filter((item) => item.predicted === item.actual).length;
+  const logisticWeights = new Map<Sentiment, number[]>();
+  const sigmoid = (value: number) => 1 / (1 + Math.exp(-clamp(value, -30, 30)));
+  classes.forEach((label) => {
+    const weights = vocabulary.map(() => 0);
+    for (let epoch = 0; epoch < 4; epoch += 1) {
+      for (const document of training) {
+        const values = vector(document.tokens);
+        const target = document.label === label ? 1 : 0;
+        const probability = sigmoid(values.reduce((sum, value, index) => sum + value * weights[index], 0));
+        const error = target - probability;
+        values.forEach((value, index) => { weights[index] += 0.08 * (error * value - 0.0005 * weights[index]); });
+      }
+    }
+    logisticWeights.set(label, weights);
+  });
+  const logisticPredict = (tokens: string[]): Sentiment => {
+    const values = vector(tokens);
+    return classes.reduce((best, label) => {
+      const weights = logisticWeights.get(label) ?? [];
+      const score = sigmoid(values.reduce((sum, value, index) => sum + value * (weights[index] ?? 0), 0));
+      return score > best.score ? { label, score } : best;
+    }, { label: "neutral" as Sentiment, score: -1 }).label;
+  };
+  const logisticPredictions = testing.map((document) => ({ actual: document.label, predicted: logisticPredict(document.tokens) }));
+  const metricSummary = (items: Array<{ actual: Sentiment; predicted: Sentiment }>) => {
+    const perClass = classes.map((label) => {
+      const truePositive = items.filter((item) => item.actual === label && item.predicted === label).length;
+      const falsePositive = items.filter((item) => item.actual !== label && item.predicted === label).length;
+      const falseNegative = items.filter((item) => item.actual === label && item.predicted !== label).length;
+      const precision = truePositive / Math.max(1, truePositive + falsePositive);
+      const recall = truePositive / Math.max(1, truePositive + falseNegative);
+      return { precision, recall, f1: (2 * precision * recall) / Math.max(0.0001, precision + recall) };
+    });
+    return { precision: Math.round((perClass.reduce((sum, item) => sum + item.precision, 0) / classes.length) * 100), recall: Math.round((perClass.reduce((sum, item) => sum + item.recall, 0) / classes.length) * 100), macroF1: Math.round((perClass.reduce((sum, item) => sum + item.f1, 0) / classes.length) * 100) };
+  };
+  const logisticMetrics = metricSummary(logisticPredictions);
   const confusionMatrix = classes.map((actual) => ({
     actual,
     positive: predictions.filter((item) => item.actual === actual && item.predicted === "positive").length,
@@ -340,7 +380,7 @@ function buildModelComparison(comments: AnalyzedComment[]): ModelComparison {
     return { precision, recall, f1: (2 * precision * recall) / Math.max(0.0001, precision + recall) };
   });
   const coverage = Math.round((comments.filter((comment) => comment.language !== "other").length / Math.max(1, comments.length)) * 100);
-  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), precision: Math.round((perClass.reduce((sum, item) => sum + item.precision, 0) / classes.length) * 100), recall: Math.round((perClass.reduce((sum, item) => sum + item.recall, 0) / classes.length) * 100), macroF1: Math.round((perClass.reduce((sum, item) => sum + item.f1, 0) / classes.length) * 100), ruleBasedCoverage: coverage, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix, note: "Holdout metrics use a balanced real sample from L3Cube-MahaSent-MD. Emotion labels in this sample are compatibility labels, not gold emotion annotations." };
+  return { tfidfNaiveBayesAccuracy: Math.round((correct / testing.length) * 100), tfidfLogisticRegressionAccuracy: Math.round((logisticPredictions.filter((item) => item.actual === item.predicted).length / testing.length) * 100), precision: Math.round((perClass.reduce((sum, item) => sum + item.precision, 0) / classes.length) * 100), recall: Math.round((perClass.reduce((sum, item) => sum + item.recall, 0) / classes.length) * 100), macroF1: Math.round((perClass.reduce((sum, item) => sum + item.f1, 0) / classes.length) * 100), logisticPrecision: logisticMetrics.precision, logisticRecall: logisticMetrics.recall, logisticMacroF1: logisticMetrics.macroF1, ruleBasedCoverage: coverage, datasetSize: REAL_MARATHI_TRAINING_DATASET.length, datasetName: "L3Cube-MahaSent-MD real sample", vocabularySize: vocabulary.length, trainingComments: training.length, testingComments: testing.length, confusionMatrix, note: "Holdout metrics use a balanced real sample from L3Cube-MahaSent-MD. Naive Bayes and Logistic Regression use the same TF-IDF vocabulary and split. Emotion labels in this sample are compatibility labels, not gold emotion annotations." };
 }
 
 function classifyComment(comment: RawComment): AnalyzedComment {

@@ -45,10 +45,11 @@ pnpm build
 - Marathi stop-word removal
 - Explainable lexicon sentiment scoring with negation handling
 - Rule-based emotion scoring
-- TF-IDF + Naive Bayes evaluation panel with accuracy, precision, recall, macro-F1, and confusion matrix
+- TF-IDF + Naive Bayes and TF-IDF + Logistic Regression comparison panel with accuracy, precision, recall, macro-F1, and confusion matrix
 - Downloadable annotation template for manually labeling 100–150 real YouTube comments
 - Search, sentiment/emotion filters, language filters, sorting, and paginated browsing of all fetched comments
 - Recharts visualizations for the dashboard
+- In-app project suggestions for gold-label annotation, multi-video comparison, and limitation reporting
 
 This transparent baseline is intentionally suitable for an academic minor project and can later be upgraded with a real Marathi corpus or IndicBERT. See [MARATHI_NLP_RESOURCES.md](MARATHI_NLP_RESOURCES.md) for verified real datasets, tools, API references, and licensing caveats.
 

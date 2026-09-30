@@ -37,6 +37,8 @@ describe("Marathi analysis engine", () => {
     expect(result.modelComparison.precision).toBeGreaterThanOrEqual(0);
     expect(result.modelComparison.recall).toBeGreaterThanOrEqual(0);
     expect(result.modelComparison.macroF1).toBeGreaterThanOrEqual(0);
+    expect(result.modelComparison.tfidfLogisticRegressionAccuracy).toBeGreaterThanOrEqual(0);
+    expect(result.modelComparison.logisticMacroF1).toBeGreaterThanOrEqual(0);
     expect(result.modelComparison.confusionMatrix).toHaveLength(3);
   });
 
