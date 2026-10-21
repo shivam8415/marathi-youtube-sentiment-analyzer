@@ -1,0 +1,10 @@
+# Copy these values into a local .env file. Never commit that .env file.
+NODE_ENV=development
+
+# Required only for live YouTube comment retrieval
+YOUTUBE_API_KEY=your_google_cloud_youtube_data_api_key
+
+# Optional local settings
+JWT_SECRET=replace_with_a_long_random_local_secret
+OAUTH_SERVER_URL=
+DATABASE_URL=
